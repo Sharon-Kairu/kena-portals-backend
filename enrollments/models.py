@@ -4,7 +4,7 @@ from courses.models import Course,SubscriptionPlan
 
 class Enrollment(models.Model):
     MODE_CHOICES=(
-        ('standalone','Standalone')
+        ('standalone','Standalone'),
         ('subscription','Subscription')
     )
     student=models.ForeignKey(Student, on_delete=models.CASCADE)

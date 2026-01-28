@@ -4,18 +4,11 @@ from courses.models import Course, SubscriptionPlan
 
 class Student(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
-    
-    # ================= COURSES / SUBSCRIPTION =================
-    subscription_plan = models.ForeignKey(
-        SubscriptionPlan,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True
+    student_id = models.CharField(
+        max_length=10,
+        unique=True,
+        editable=False
     )
-    # For standalone courses
-    courses = models.ManyToManyField(Course, blank=True)
-
-    # ================= NEXT OF KIN =================
     nok_first_name = models.CharField(max_length=50)
     nok_last_name = models.CharField(max_length=50)
     nok_email = models.EmailField(blank=True)
@@ -36,10 +29,20 @@ class Student(models.Model):
     )
     driving_exam_date = models.DateField(null=True, blank=True)
     driving_pdl_date = models.DateField(null=True, blank=True)
-    driving_pdl= models.CharField(null=True, blank=True, unique=True)
+    driving_pdl= models.CharField(null=True, blank=True, unique=True, max_length=20)
 
-    def __str__(self):
-        return self.user.get_full_name() or self.user.first_name
+    def save(self, *args, **kwargs):
+        if not self.student_id:
+            last_student = Student.objects.order_by('-id').first()
+            if last_student and last_student.student_id:
+                last_number = int(last_student.student_id.replace('STD', ''))
+                new_number = last_number + 1
+            else:
+                new_number = 1
+
+            self.student_id = f"STD{new_number:04d}"
+
+        super().save(*args, **kwargs)
 
 
 class StudentModule(models.Model):
@@ -57,7 +60,7 @@ class StudentModule(models.Model):
         default='pending'
     )
     date_graded = models.DateField(null=True, blank=True)
-    comment = models.CharField(blank=True, options=COMMENT_OPTIONS)
+    comment = models.CharField(blank=True, choices=COMMENT_OPTIONS, max_length=10)
 
     class Meta:
         unique_together = ('student', 'module')
