@@ -7,6 +7,9 @@ from .serializers import StudentSerializer
 from rest_framework.permissions import IsAuthenticated
 from enrollments.models import Enrollment
 from enrollments.serializers import EnrollmentSerializer
+from payments.models import Payment
+from payments.serializers import PaymentSerializer
+
 
 class AllStudentsView(APIView):
     def get(self, request):
@@ -31,11 +34,44 @@ class IndividualStudentView(APIView):
                 enrollment_data = enrollment_serializer.data
             except Enrollment.DoesNotExist:
                 enrollment_data = None
+
+            # Get payment data
+            try:
+                payments = Payment.objects.filter(student=student).order_by('-payment_date', '-id')
+                
+                # Calculate totals
+                total_paid = sum(payment.amount for payment in payments)
+                balance = student.total_fees - total_paid if student.total_fees else 0
+                
+                payment_data = {
+                    'summary': {
+                        'total_fees': str(student.total_fees) if student.total_fees else '0',
+                        'total_paid': str(total_paid),
+                        'balance': str(balance)
+                    },
+                    'payments': []
+                }
+                
+                for payment in payments:
+                    payment_data['payments'].append({
+                        'id': payment.id,
+                        'amount': str(payment.amount),
+                        'payment_date': payment.payment_date.isoformat(),
+                        'payment_method': payment.payment_method,
+                        'transaction_code': payment.transaction_code,
+                        'receipt_number': payment.receipt_number
+                    })
+                    
+            except Exception as e:  # Changed from "except: Payment.DoesNotExist"
+                print(f"Error fetching payments: {e}")
+                payment_data = None
             
             return Response({
                 'student': student_serializer.data,
-                'enrollment': enrollment_data
+                'enrollment': enrollment_data,
+                'payments': payment_data  
             }, status=status.HTTP_200_OK)
+            
         except Student.DoesNotExist:
             return Response(
                 {"error": "Student not found"}, 

@@ -13,14 +13,17 @@ class Payment(models.Model):
     payment_date = models.DateField(auto_now_add=True)
     payment_method = models.CharField(max_length=10, choices=PAYMENT_OPTIONS)
     transaction_code = models.CharField(max_length=50, unique=True, blank=True, null=True)
-    receipt_number = models.CharField(max_length=20, unique=True, )
+    receipt_number = models.CharField(max_length=20, unique=True, blank=True, null=True)
 
     def save(self, *args, **kwargs):
         if not self.receipt_number:  
             last_payment = Payment.objects.order_by('-id').first()
             if last_payment and last_payment.receipt_number:
-                last_number = int(last_payment.receipt_number.replace('RCT', ''))
-                new_number = last_number + 1
+                try:
+                    last_number = int(last_payment.receipt_number.replace('RCT', ''))
+                    new_number = last_number + 1
+                except (ValueError, AttributeError):
+                    new_number = 1
             else:
                 new_number = 1
 
@@ -29,4 +32,9 @@ class Payment(models.Model):
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return f"{self.student.get_full_name()} - {self.amount} via {self.payment_method} ({self.receipt_number})"
+        # Changed this line to access user through student
+        student_name = f"{self.student.user.first_name} {self.student.user.last_name}"
+        return f"{student_name} - {self.amount} via {self.payment_method} ({self.receipt_number})"
+
+    class Meta:
+        ordering = ['-payment_date', '-id']
