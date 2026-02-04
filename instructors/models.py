@@ -1,10 +1,17 @@
 from django.db import models
 from users.models import User
-from courses.models import Course
+from courses.models import Course,CourseCategory
 
 class Instructor(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    category= models.ForeignKey(Course, on_delete=models.CASCADE)
+    course= models.ForeignKey(Course, on_delete=models.CASCADE, null=True,blank=True)
+    category = models.ForeignKey(
+    CourseCategory, 
+        on_delete=models.CASCADE, 
+        related_name='instructor_category',
+        null=True,
+        blank=True
+    ) 
     national_id = models.CharField(max_length=15, unique=True)
     instructor_id = models.CharField(max_length=15, unique=True)
     date_of_birth = models.DateField()

@@ -3,4 +3,5 @@ from . import views
 
 urlpatterns = [
     path('register/', views.RegisterInstructorView.as_view(), name='instructor-register'),
+    path('get_instructors/',views.GetInstructors, name='get-instructors')
 ]

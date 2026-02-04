@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from courses.models import Course, Module
+from courses.models import Course, Module,CourseCategory
 
 class Command(BaseCommand):
     help = "Seed initial courses and modules"
@@ -46,6 +46,20 @@ class Command(BaseCommand):
             )
 
         driving, _ = Course.objects.get_or_create(name="driving")
+        driving, _ = Course.objects.get_or_create(name="driving")
+        
+        # Create categories using choice values
+        practical, _ = CourseCategory.objects.get_or_create(
+            course=driving,
+            name='practical',  # Use the choice value
+            defaults={'order': 1}
+        )
+        
+        theory, _ = CourseCategory.objects.get_or_create(
+            course=driving,
+            name='theory',  # Use the choice value
+            defaults={'order': 2}
+        )
         driving_modiles=[
             "Introduction",
             "Use of break,clutch and handbrake",
