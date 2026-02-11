@@ -1,6 +1,7 @@
 from django.db import models
 from students.models import Student
 from courses.models import Course,SubscriptionPlan
+from instructors.models import Instructor
 
 class Enrollment(models.Model):
     MODE_CHOICES=(
@@ -26,6 +27,11 @@ class Enrollment(models.Model):
         Course,
         blank=True,
         related_name="subscription_students"
+    )
+    instructors=models.ManyToManyField(
+        Instructor,
+        blank=True,
+        related_name="selected_instructors"
     )
 
     def clean(self):

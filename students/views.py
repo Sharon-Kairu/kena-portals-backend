@@ -111,11 +111,8 @@ class IndividualStudentView(APIView):
 
 class MeStudentView(APIView):
     permission_classes = [IsAuthenticated]
-
-
     def get(self, request):
         user = request.user
-
 
         try:
          student = Student.objects.get(user=user)
@@ -124,7 +121,46 @@ class MeStudentView(APIView):
             {"detail": "Student profile not found for this user"},
             status=status.HTTP_404_NOT_FOUND
         )
+        try:
+            payments = Payment.objects.filter(student=student).order_by('-payment_date', '-id')
+            
+            # Calculate totals
+            total_paid = sum(payment.amount for payment in payments)
+            balance = student.total_fees - total_paid if student.total_fees else 0
+            
+            payment_data = {
+                'summary': {
+                    'total_fees': str(student.total_fees) if student.total_fees else '0',
+                    'total_paid': str(total_paid),
+                    'balance': str(balance)
+                },
+                'payments': []
+            }
+            
+            for payment in payments:
+                payment_data['payments'].append({
+                    'id': payment.id,
+                    'amount': str(payment.amount),
+                    'payment_date': payment.payment_date.isoformat(),
+                    'payment_method': payment.payment_method,
+                    'transaction_code': payment.transaction_code,
+                    'receipt_number': payment.receipt_number
+                })
+                
+        except Exception as e:  # Changed from "except: Payment.DoesNotExist"
+            print(f"Error fetching payments: {e}")
+            payment_data = None
 
+        try:
+            enrollment = Enrollment.objects.prefetch_related(
+                'standalone_courses',
+                'subscription_courses',
+                'subscription_plan'
+            ).get(student=student)
+            enrollment_serializer = EnrollmentSerializer(enrollment)
+            enrollment_data = enrollment_serializer.data
+        except Enrollment.DoesNotExist:
+            enrollment_data = None
 
         return Response({
         "id": user.id,
@@ -137,11 +173,11 @@ class MeStudentView(APIView):
         "student_id": student.student_id,
         "total_fees": str(student.total_fees),
         "payment_status": student.payment_status,
+        "payments":payment_data,
+        "enrollment":enrollment_data,
         "exam_date": student.driving_exam_date,
         "pdl_date": student.driving_pdl_date,
         "pdl": student.driving_pdl,
-
-
         "nok_first_name": student.nok_first_name,
         "nok_last_name": student.nok_last_name,
         "nok_phone": student.nok_phone,

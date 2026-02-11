@@ -79,7 +79,5 @@ class RegisterInstructorView(APIView):
 class GetInstructors(APIView):
     def get(self,request):
         instructors=Instructor.objects.all()
-        ser=InstructorSerializer
-        if ser.is_valid():
-            ser.save
-        return instructors
+        serializer = InstructorSerializer(instructors, many=True) 
+        return Response(serializer.data) 

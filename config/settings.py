@@ -18,6 +18,8 @@ ALLOWED_HOSTS = []
 
 AUTH_USER_MODEL = 'users.User'
 
+SITE_ID = 1
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -42,6 +44,7 @@ INSTALLED_APPS = [
     'enrollments',
     'students',  
     'payments',
+    'extra_classes',
 ]
 
 
@@ -147,21 +150,15 @@ USE_I18N = True
 
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/6.0/howto/static-files/
-
 STATIC_URL = 'static/'
-USE_COOKIE_JWT = True # custom flag just for reference
+USE_COOKIE_JWT = True 
 
-
-# Set to True in production (HTTPS)
-SECURE_COOKIE = False # True in production
+SECURE_COOKIE = False 
 
 
 # Access token cookie
 ACCESS_TOKEN_COOKIE_NAME = "access_token"
-ACCESS_TOKEN_COOKIE_AGE = 60 * 15 # 15 minutes
+ACCESS_TOKEN_COOKIE_AGE = 60 * 15 
 ACCESS_TOKEN_COOKIE_HTTPONLY = False
 ACCESS_TOKEN_COOKIE_SAMESITE = 'Lax'
 ACCESS_TOKEN_COOKIE_SECURE = SECURE_COOKIE
@@ -169,7 +166,7 @@ ACCESS_TOKEN_COOKIE_SECURE = SECURE_COOKIE
 
 # Refresh token cookie
 REFRESH_TOKEN_COOKIE_NAME = "refresh_token"
-REFRESH_TOKEN_COOKIE_AGE = 60 * 60 * 24 * 7 # 7 days
+REFRESH_TOKEN_COOKIE_AGE = 60 * 60 * 24 * 7
 REFRESH_TOKEN_COOKIE_HTTPONLY = True
 REFRESH_TOKEN_COOKIE_SAMESITE = 'Lax'
 REFRESH_TOKEN_COOKIE_SECURE = SECURE_COOKIE
