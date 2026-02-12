@@ -7,6 +7,8 @@ from users.models import User
 from students.models import Student
 from enrollments.models import Enrollment
 from courses.models import SubscriptionPlan, Course
+from instructors.models import Instructor
+from students.utils import assign_modules_to_student
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
@@ -66,6 +68,16 @@ def enroll_student(request):
                     enrollment.standalone_courses.set(courses)
                 else:
                     enrollment.subscription_courses.set(courses)
+                
+                # Assign all modules from enrolled courses to the student
+                assign_modules_to_student(student, courses)
+            
+            # 6. Add instructors from instructor_assignments
+            instructor_assignments = request.data.get('instructor_assignments', [])
+            if instructor_assignments:
+                instructor_ids = [assignment['instructor_id'] for assignment in instructor_assignments]
+                instructors = Instructor.objects.filter(id__in=instructor_ids)
+                enrollment.instructors.set(instructors)
             
             return Response({
                 'message': 'Student enrolled successfully',

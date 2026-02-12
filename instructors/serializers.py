@@ -6,7 +6,7 @@ from courses.models import Course, CourseCategory
 class InstructorSerializer(serializers.ModelSerializer):
     # WRITE-ONLY (for create)
     course_name = serializers.CharField(write_only=True, required=False)
-    category_name = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    category_name = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
 
     # READ-ONLY (for frontend)
     full_name = serializers.SerializerMethodField()
@@ -29,6 +29,7 @@ class InstructorSerializer(serializers.ModelSerializer):
             # extra fields (still available if needed)
             "national_id",
             "instructor_id",
+            "license_number",
             "date_of_birth",
             "nok_first_name",
             "nok_last_name",
@@ -59,8 +60,8 @@ class InstructorSerializer(serializers.ModelSerializer):
                     "course_name": f'Course "{course_name}" does not exist'
                 })
 
-        # Get category by name (if provided)
-        if category_name:
+        # Get category by name (if provided and not empty)
+        if category_name and category_name.strip():
             try:
                 category = CourseCategory.objects.get(
                     course=validated_data["course"],

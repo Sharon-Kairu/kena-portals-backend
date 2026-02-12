@@ -2,13 +2,15 @@ from django.shortcuts import render
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Student
-from .serializers import StudentSerializer
+from django.utils import timezone
+from .models import Student, StudentModule
+from .serializers import StudentSerializer, StudentModuleSerializer
 from rest_framework.permissions import IsAuthenticated
 from enrollments.models import Enrollment
 from enrollments.serializers import EnrollmentSerializer
 from payments.models import Payment
 from payments.serializers import PaymentSerializer
+from instructors.models import Instructor
 
 
 class AllStudentsView(APIView):
@@ -182,4 +184,105 @@ class MeStudentView(APIView):
         "nok_last_name": student.nok_last_name,
         "nok_phone": student.nok_phone,
         })
+
+
+class StudentModulesView(APIView):
+    """View for students to see their module progress"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            student = Student.objects.get(user=request.user)
+            modules = StudentModule.objects.filter(student=student).select_related(
+                'module',
+                'module__course',
+                'instructor',
+                'instructor__user'
+            ).order_by('module__course', 'module__order')
+
+            serializer = StudentModuleSerializer(modules, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Student.DoesNotExist:
+            return Response(
+                {"detail": "Student profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class InstructorStudentModulesView(APIView):
+    """View for instructors to see modules of their assigned students"""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            instructor = Instructor.objects.get(user=request.user)
+            
+            # Get all enrollments where this instructor is assigned
+            enrollments = Enrollment.objects.filter(instructors=instructor)
+            student_ids = enrollments.values_list('student_id', flat=True)
+
+            # Get all modules for these students
+            modules = StudentModule.objects.filter(
+                student_id__in=student_ids
+            ).select_related(
+                'student',
+                'student__user',
+                'module',
+                'module__course',
+                'instructor',
+                'instructor__user'
+            ).order_by('student', 'module__course', 'module__order')
+
+            serializer = StudentModuleSerializer(modules, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Instructor.DoesNotExist:
+            return Response(
+                {"detail": "Instructor profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+
+class GradeModuleView(APIView):
+    """View for instructors to grade a specific module"""
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, module_id):
+        try:
+            instructor = Instructor.objects.get(user=request.user)
+            student_module = StudentModule.objects.get(id=module_id)
+
+            # Update the module with grading info
+            new_status = request.data.get('status')
+            new_comment = request.data.get('comment', '')
+
+            if new_status not in ['pending', 'completed']:
+                return Response(
+                    {"detail": "Invalid status. Must be 'pending' or 'completed'."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            student_module.status = new_status
+            student_module.comment = new_comment
+            student_module.instructor = instructor
+
+            if new_status == 'completed':
+                student_module.date_graded = timezone.now().date()
+
+            student_module.save()
+
+            serializer = StudentModuleSerializer(student_module)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Instructor.DoesNotExist:
+            return Response(
+                {"detail": "Instructor profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except StudentModule.DoesNotExist:
+            return Response(
+                {"detail": "Module not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
 

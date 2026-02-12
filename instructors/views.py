@@ -6,6 +6,7 @@ from django.db import transaction
 from users.models import User
 from .serializers import InstructorSerializer
 from .models import Instructor
+from enrollments.models import Enrollment
 
 class RegisterInstructorView(APIView):
     permission_classes = [IsAuthenticated]  # Only admins can register instructors
@@ -38,13 +39,13 @@ class RegisterInstructorView(APIView):
                         "errors": {"user": [str(e)]}
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # 3. Prepare instructor data
+                # 3. Prepare instructor data (instructor_id auto-generated in model)
                 instructor_data = {
                     'user': user.id,
                     'course_name': request.data.get('course'),  # Use course_name field
-                    'category_name': request.data.get('category', ''),  # Use category_name field
+                    'category_name': request.data.get('category'),  # Use category_name field, None for non-driving
                     'national_id': request.data.get('national_id'),
-                    'instructor_id': request.data.get('instructor_id'),
+                    'license_number': request.data.get('license_number', ''),  # Optional license for driving instructors
                     'date_of_birth': request.data.get('date_of_birth'),
                     'nok_first_name': request.data.get('nok_first_name'),
                     'nok_last_name': request.data.get('nok_last_name'),
@@ -81,3 +82,53 @@ class GetInstructors(APIView):
         instructors=Instructor.objects.all()
         serializer = InstructorSerializer(instructors, many=True) 
         return Response(serializer.data) 
+    
+class InstructorStudents(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            instructor = Instructor.objects.get(user=request.user)
+            enrollments = Enrollment.objects.filter(
+                instructors=instructor
+            ).select_related(
+                'student',
+                'subscription_plan'
+            ).prefetch_related(
+                'standalone_courses',
+                'subscription_courses'
+            )
+
+            data = []
+
+            for enrollment in enrollments:
+                courses = []
+
+                if enrollment.mode == 'standalone':
+                    courses = enrollment.standalone_courses.all()
+                elif enrollment.mode == 'subscription':
+                    courses = enrollment.subscription_courses.all()
+
+                data.append({
+                    "student_id": enrollment.student.id,
+                    "student_name": enrollment.student.user.get_full_name(),
+                    "mode": enrollment.mode,
+                    "subscription_plan": enrollment.subscription_plan.name
+                    if enrollment.subscription_plan else None,
+                    "courses": [
+                        {
+                            "id": course.id,
+                            "name": course.name,
+                        }
+                        for course in courses
+                    ]
+                })
+
+            return Response(data, status=status.HTTP_200_OK)
+
+        except Instructor.DoesNotExist:
+            return Response(
+                {"detail": "Instructor profile not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
