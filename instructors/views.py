@@ -4,7 +4,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from django.db import transaction
 from users.models import User
-from .serializers import InstructorSerializer
+from .serializers import InstructorSerializer, InstructorListSerializer, InstructorDetailSerializer
 from .models import Instructor
 from enrollments.models import Enrollment
 
@@ -14,38 +14,72 @@ class RegisterInstructorView(APIView):
     def post(self, request):
         try:
             with transaction.atomic():
-                # 1. Extract and validate user data
+                # 1. Extract and validate ALL data first
                 user_data = request.data.get('user', {})
                 
+                # Validate user data
                 if not user_data:
                     return Response({
-                        "message": "Error registering instructor",
+                        "message": "User data is required",
                         "errors": {"user": ["User data is required"]}
                     }, status=status.HTTP_400_BAD_REQUEST)
                 
-                # 2. Create the user account
+                # Check required user fields
+                required_user_fields = ['email', 'password', 'first_name', 'last_name', 'phone_number', 'national_id']
+                missing_user_fields = [field for field in required_user_fields if not user_data.get(field)]
+                if missing_user_fields:
+                    return Response({
+                        "message": "Missing required user fields",
+                        "errors": {"user": [f"Required fields missing: {', '.join(missing_user_fields)}"]}
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Check required instructor fields
+                required_instructor_fields = ['course', 'date_of_birth', 'nok_first_name', 'nok_last_name', 'nok_phone', 'nok_relationship']
+                missing_instructor_fields = [field for field in required_instructor_fields if not request.data.get(field)]
+                if missing_instructor_fields:
+                    return Response({
+                        "message": "Missing required instructor fields",
+                        "errors": {"instructor": [f"Required fields missing: {', '.join(missing_instructor_fields)}"]}
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # Validate course and category
+                course_name = request.data.get('course')
+                if not course_name:
+                    return Response({
+                        "message": "Course is required",
+                        "errors": {"course": ["Please select a course"]}
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # If driving course, category is required
+                if course_name == 'driving' and not request.data.get('category'):
+                    return Response({
+                        "message": "Category is required for driving instructors",
+                        "errors": {"category": ["Please select a category (Theory or Practical)"]}
+                    }, status=status.HTTP_400_BAD_REQUEST)
+                
+                # 2. Create the user account only after all validation passes
                 try:
                     user = User.objects.create_user(
                         email=user_data.get('email'),
                         password=user_data.get('password'),
-                        first_name=user_data.get('first_name', ''),
-                        last_name=user_data.get('last_name', ''),
-                        phone_number=user_data.get('phone_number', ''),
-                        role=user_data.get('role', 'instructor')
+                        first_name=user_data.get('first_name'),
+                        last_name=user_data.get('last_name'),
+                        phone_number=user_data.get('phone_number'),
+                        id_number=user_data.get('national_id'),
+                        role='instructor'
                     )
                 except Exception as e:
                     return Response({
                         "message": "Error creating user account",
                         "errors": {"user": [str(e)]}
                     }, status=status.HTTP_400_BAD_REQUEST)
-                
-                # 3. Prepare instructor data (instructor_id auto-generated in model)
+            
+                # 3. Prepare instructor data
                 instructor_data = {
                     'user': user.id,
-                    'course_name': request.data.get('course'),  # Use course_name field
-                    'category_name': request.data.get('category'),  # Use category_name field, None for non-driving
-                    'national_id': request.data.get('national_id'),
-                    'license_number': request.data.get('license_number', ''),  # Optional license for driving instructors
+                    'course_name': course_name,
+                    'category_name': request.data.get('category'),
+                    'license_number': request.data.get('license_number', ''),
                     'date_of_birth': request.data.get('date_of_birth'),
                     'nok_first_name': request.data.get('nok_first_name'),
                     'nok_last_name': request.data.get('nok_last_name'),
@@ -65,7 +99,6 @@ class RegisterInstructorView(APIView):
                     }, status=status.HTTP_201_CREATED)
                 else:
                     # If instructor creation fails, the transaction will rollback
-                    # and the user won't be created either
                     return Response({
                         "message": "Error registering instructor",
                         "errors": serializer.errors
@@ -78,10 +111,58 @@ class RegisterInstructorView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
 class GetInstructors(APIView):
-    def get(self,request):
-        instructors=Instructor.objects.all()
-        serializer = InstructorSerializer(instructors, many=True) 
-        return Response(serializer.data) 
+    """Get all instructors with basic information for listing"""
+    def get(self, request):
+        instructors = Instructor.objects.select_related('user', 'course', 'category').all()
+        serializer = InstructorListSerializer(instructors, many=True) 
+        return Response(serializer.data)
+
+
+class IndividualInstructorView(APIView):
+    """Get detailed information for a specific instructor"""
+    def get(self, request, instructor_id):
+        try:
+            instructor = Instructor.objects.select_related('user', 'course', 'category').get(
+                instructor_id=instructor_id
+            )
+            serializer = InstructorDetailSerializer(instructor)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Instructor.DoesNotExist:
+            return Response(
+                {"error": "Instructor not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    def patch(self, request, instructor_id):
+        """Update instructor details"""
+        try:
+            instructor = Instructor.objects.get(instructor_id=instructor_id)
+            
+            # Update instructor fields
+            for field in ['national_id', 'license_number', 'date_of_birth', 
+                         'nok_first_name', 'nok_last_name', 'nok_email', 
+                         'nok_phone', 'nok_relationship', 'nok_occupation']:
+                if field in request.data:
+                    setattr(instructor, field, request.data[field])
+            
+            # Update user fields if provided
+            if 'user' in request.data:
+                user = instructor.user
+                user_data = request.data['user']
+                for field in ['first_name', 'last_name', 'email', 'phone_number']:
+                    if field in user_data:
+                        setattr(user, field, user_data[field])
+                user.save()
+            
+            instructor.save()
+            
+            serializer = InstructorDetailSerializer(instructor)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Instructor.DoesNotExist:
+            return Response(
+                {"error": "Instructor not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
     
 class InstructorStudents(APIView):
     permission_classes = [IsAuthenticated]

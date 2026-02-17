@@ -15,11 +15,40 @@ from students.utils import assign_modules_to_student
 def enroll_student(request):
     try:
         with transaction.atomic():
-            # 1. Create User
+            # 1. Validate ALL data first before creating any records
             user_data = request.data.get('user', {})
-
+            
+            # Check required user fields
+            required_user_fields = ['email', 'password', 'first_name', 'last_name', 'phone', 'id_number']
+            missing_user_fields = [field for field in required_user_fields if not user_data.get(field)]
+            if missing_user_fields:
+                return Response({
+                    'message': 'Missing required student information',
+                    'errors': {'user': [f"Required fields missing: {', '.join(missing_user_fields)}"]}
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Check required student fields
+            required_student_fields = ['nok_first_name', 'nok_last_name', 'nok_phone', 'nok_relationship', 'total_fees']
+            missing_student_fields = [field for field in required_student_fields if not request.data.get(field)]
+            if missing_student_fields:
+                return Response({
+                    'message': 'Missing required next of kin or fee information',
+                    'errors': {'student': [f"Required fields missing: {', '.join(missing_student_fields)}"]}
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Validate courses and enrollment mode
+            subscription_plan_id = request.data.get('subscription_plan')
+            courses_ids = request.data.get('courses', [])
+            
+            if not subscription_plan_id and not courses_ids:
+                return Response({
+                    'message': 'Please select either a subscription plan or standalone courses',
+                    'errors': {'courses': ['No courses or subscription plan selected']}
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # 2. Create User only after all validation passes
             user = User.objects.create_user(
-                role=user_data.get('role'),
+                role='student',
                 email=user_data['email'],
                 password=user_data['password'],
                 first_name=user_data['first_name'],

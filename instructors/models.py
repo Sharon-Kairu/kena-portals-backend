@@ -12,7 +12,6 @@ class Instructor(models.Model):
         null=True,
         blank=True
     ) 
-    national_id = models.CharField(max_length=15, unique=True)
     instructor_id = models.CharField(max_length=15, unique=True, editable=False, blank=True)
     license_number = models.CharField(max_length=20, blank=True, null=True)  # For driving instructors
     date_of_birth = models.DateField()
